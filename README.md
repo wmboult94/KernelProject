@@ -3,6 +3,6 @@
 
 * Code written in Python
 
-##  Tested on datasets available on UCI Machine Learning Laboratory
-### - Libra hand motion data
-### - Auslan sign language data
+###  Tested on datasets available on UCI Machine Learning Laboratory
+#### - Libra hand motion data
+#### - Auslan sign language data
