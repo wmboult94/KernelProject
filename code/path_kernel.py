@@ -43,7 +43,7 @@ def strucKernel(Cd, Chv, xlen, ylen):
 
 def pathKernel(s, t):
 	# Ks = [len(s), len(t)]
-	kronMatrix = kron(kernRBF.K(s,t),strucKernel(0.4,0.35,len(s),len(t)))
+	kronMatrix = kron(kernRBF.K(s,t),strucKernel(0.35,0.35,len(s),len(t)))
 	# plt.matshow(kronMatrix)
 	# plt.show()
 	total = kronMatrix.sum()
@@ -57,19 +57,26 @@ def frontKernel(s, t, f=-1, overlap=0):	# Front kernel can handle sequences of d
 
 	if len(s) != len(t): overlap=0
 	if f == -1:
-		f = int(min(20,max(0.05*min(len(s), len(t)), 5)))	# front size is between 5 and 15
+		f_s = int(min(15,max(0.05*len(s), 5)))	# front size s length is between 5 and 15
+		f_t = int(min(15,max(0.05*len(t), 5)))	# front size t length is between 5 and 15
+	else:
+		f_s = f
+		f_t = f
 
 	acc=1
 	j=1
 	result=0
-	inc_s = max(int(math.floor(float(len(s)) / max(len(s), len(t)) * f))-overlap, 1)	# work out front increments for each sequence
-	inc_t = max(int(math.floor(float(len(t)) / max(len(s), len(t)) * f))-overlap, 1)
-	for i in range(1, len(s)+1, inc_s):
-		ub_s = min(i-1+f,len(s))
-		ub_t = min(j-1+f,len(t))
+	max_len = max(len(s), len(t))
+	inc_s = max(int(math.floor(float(len(s)) / max_len * f_s))-overlap, 1)	# work out front increments for each sequence
+	inc_t = max(int(math.floor(float(len(t)) / max_len * f_t))-overlap, 1)
+	inc_i = max(inc_s, inc_t)
+	inc_j = min(inc_s, inc_t)
+	for i in range(1, max_len+1, inc_i):
+		ub_s = min(i-1+f_s,len(s))
+		ub_t = min(j-1+f_t,len(t))
 		result += acc * pathKernel(s[i-1:ub_s], t[j-1:ub_t])
 		# print(result)
-		j += inc_t
+		j += inc_j
 		acc += 1
 	return result
 
@@ -87,7 +94,7 @@ def twoDimFrontMatrix(X,Y=None):
 				y2 = c2[:,1].reshape(len(c2[:,1]),1)
 
 				# K[i][j] = pathKernel(x1,x2)
-				K[i][j] = frontKernel(x1,x2,6) + frontKernel(y1,y2,6)
+				K[i][j] = frontKernel(x1,x2) + frontKernel(y1,y2)
 			print '\n'
 	else:
 		K = np.zeros((len(X),len(Y)))
@@ -101,10 +108,9 @@ def twoDimFrontMatrix(X,Y=None):
 				y2 = c2[:,1].reshape(len(c2[:,1]),1)
 
 				# K[i][j] = pathKernel(x1,x2)
-				K[i][j] = frontKernel(x1,x2,6) + frontKernel(y1,y2,6)
+				K[i][j] = frontKernel(x1,x2) + frontKernel(y1,y2)
 			print '\n'
 	return K
-
 
 
 # Takes in an array of sequences X, builds the kernel matrix s.t K_ij = K(s_i,s_j)
@@ -113,12 +119,12 @@ def frontKernelMatrix(X):
 	K = np.zeros((len(X),len(X)))
 	for i, x1 in enumerate(X):
 		print '***********'
+		print i, '/', len(X)
 		for j, x2 in enumerate(X):
-			x1 = x1.reshape(len(x1),1)
-			x2 = x2.reshape(len(x2),1)
+			# x1 = x1.reshape(len(x1),1)
+			# x2 = x2.reshape(len(x2),1)
 			# K[i][j] = pathKernel(x1,x2)
-			K[i][j] = frontKernel(x1,x2,3)
-			print i, '- ', j
+			K[i][j] = frontKernel(x1,x2)
 		print '\n'
 	return K
 
@@ -192,6 +198,27 @@ def timing():
 	plt.show()
 
 
+# Read files in from a folder hierarchy, builds array of samples along with their class names
+def readFolderData(folder):
+	dataset = []
+	folder_list = os.listdir(folder)
+	for subfolder in folder_list:
+		file_list = os.listdir(folder + '/' + subfolder)
+		for a_file in file_list:
+			sequence = []
+			f = io.open(folder + '/' + subfolder + '/' + a_file, 'r', encoding='utf-8')
+			for line in f:
+				vals = line.split()
+				sequence.append([float(x) for x in vals])
+			sample = np.array(sequence)
+			name = os.path.splitext(os.path.basename(a_file))[0]
+			name = name.split('-')[0]
+			dataset.append({'sample':sample, 'class':name})
+			f.close()
+
+	return dataset
+
+
 # Read files in and arrange as arrays of co-ordinates
 def readCoordData(folder):
 	dataset = []
@@ -221,51 +248,40 @@ def readCoordData(folder):
 
 # Read in libra data, format and classify
 def libraClassification():
+	print '--- Classifying with Libra Dataset ---'
 	#** ---- Libra dataset ---- **#
 	X, y = readCoordData('../libra_data')
 	print 'Dataset size ', X.shape
 
-	X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-	# print X_train.shape, '  ', X_test.shape
+	# -------------------------------------------- #
+	## 10 fold cross validation scores
 
-	## -- Format coord data to work in the kernels -- ##
-	#
-	# # print X_train
-	# Xx_train, Xy_train = np.split(X_train,2,2)
-	# Xx_test, Xy_test = np.split(X_test,2,2)
-	#
-	# # print Xy_train
-	# # print X_test.shape
-	#
-	# Xx_train = np.reshape(Xx_train,(len(Xx_train),-1))
-	# Xy_train = np.reshape(Xy_train,(len(Xy_train),-1))
-	# Xx_test = np.reshape(Xx_test,(len(Xx_test),-1))
-	# Xy_test = np.reshape(Xy_test,(len(Xy_test),-1))
-	#
-	# Xx_train = Xx_train.T
-	# Xy_train = Xy_train.T
-	# Xx_dot = np.dot(Xx_test, Xx_train)
-	# Xy_dot = np.dot(Xy_test, Xy_train)
-	# kmatrix_test = np.stack((Xx_dot,Xy_dot), axis=-1)
-	kmatrix_test = twoDimFrontMatrix(X_test, X_train)
-	print kmatrix_test.shape
+	clf = SVC(kernel='precomputed')
+
+	kmatrix = twoDimFrontMatrix(X)
+	# print kmatrix.shape
+	scores = cross_val_score(clf, kmatrix, y, cv=10)
+	print 'cross val score: %0.2f (+/- %0.2f)' % (scores.mean(), scores.std()*2)
 
 	# -------------------------------------------- #
+	## Traint-test split of data
 
-	kmatrix = twoDimFrontMatrix(X_train)
-	# print kmatrix.shape
-	clf = SVC(kernel='precomputed')
-	clf.fit(kmatrix, y_train)
-	# scores = cross_val_score(clf, kmatrix_test, y, cv=10)
-	y_pred = clf.predict(kmatrix_test)
-	print 'accuracy score: %0.5f' % accuracy_score(y_test, y_pred)
+	# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+	# print X_train.shape, '  ', X_test.shape
+
+	# kmatrix_train = twoDimFrontMatrix(X_train)
+	# kmatrix_test = twoDimFrontMatrix(X_test, X_train)
+	# print kmatrix_test.shape
+	# clf.fit(kmatrix_train, y_train)
+	# y_pred = clf.predict(kmatrix_test)
+	# print 'accuracy score: %0.5f' % accuracy_score(y_test, y_pred)
 
 	# twoclasses = X[:25, :]
 	# twolabels = y[:25]
 	#
 	# kernelPCA(twoclasses, twolabels, 2)
 
-	#** ---- -- ----- -- ---- **#
+	# ------- --- ----- --- ------- #
 
 
 if __name__ == "__main__":
@@ -285,8 +301,8 @@ if __name__ == "__main__":
 	cosines = []
 	labels = []
 	for i in range(0,10):
-		size = 200
-		# size = random.random_integers(400,600)
+		# size = 200
+		size = random.random_integers(400,600)
 		x = np.linspace(0,2*pi,size)
 		x = x.reshape(size,1)
 		cosx = np.array(np.cos(x))
@@ -297,8 +313,8 @@ if __name__ == "__main__":
 		labels.append(0)
 
 	for i in range(10,20):
-		size = 200
-		# size = random.random_integers(400,600)
+		# size = 200
+		size = random.random_integers(400,600)
 		x = np.linspace(0,2*pi,size)
 		x = x.reshape(size,1)
 		sinx = np.array(np.sin(x))
@@ -311,7 +327,9 @@ if __name__ == "__main__":
 	#------------------------------#
 	####### Run various functions
 
-	libraClassification()
+	# libraClassification()
+
+	readFolderData('../auslan')
 
 	# k_struc = strucKernel(0.35,0.37,40,40)
 	# plt.matshow(k_struc)
