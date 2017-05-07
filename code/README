@@ -1,0 +1,6 @@
+The code can be run by simply typing python front_kernel.py
+However the code utilises a number of datasets obtained from UCI Machine Learning Repository; links to the datasets are posted below.
+Libras dataset: https://archive.ics.uci.edu/ml/datasets/Libras+Movement
+Synthetic control dataset: https://archive.ics.uci.edu/ml/datasets/Synthetic+Control+Chart+Time+Series
+
+To perform classification on the experimental datasets, place the front kernel code in a folder within a directory, and then place the dataset folders in the root of the directory, naming the folders libra_data, and synthcontrol, respectively.
